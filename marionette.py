@@ -5,6 +5,8 @@ from __future__ import print_function
 import os
 import subprocess
 
+import fixtures
+
 class Marionette(object):
   """A very simple object for configuring Ubuntu systems as specified by parameters in __init__"""
 
@@ -13,7 +15,7 @@ class Marionette(object):
     self.services = ['apache2']
     self.directories = {'webroot': '/var/www/html/'}
     self.files = {'index': 'index.php'}
-    self.index_content = ['<?php', 'header("Content-Type: text/plain");', 'echo "Hello, world!\n";']
+    self.index_content = fixtures.INDEX_DOT_PHP
     self.index_file = ''.join([self.directories['webroot'], self.files['index']])
     self.missing_packages = []
 
@@ -34,6 +36,11 @@ class Marionette(object):
     except subprocess.CalledProcessError as e:
       print("Unable to install {0}:\n{1}".format(package, e))
 
+  def post_install_cleanup(self, package):
+    print("Doing post install cleanup for package {0}".format(package))
+    if package == 'apache2':
+      os.rename('/var/www/html/index.html', '/var/www/html/index.apache2_default')
+
   def check_directories(self):
     print("Checking for existence of provided directories")
     for directory in self.directories.values():
@@ -45,7 +52,11 @@ class Marionette(object):
         return False
 
   def create_directories():
-    pass
+    for directory in self.directories.values():
+      try:
+        os.mkdir(directory)
+      except IOError as e:
+        print("Unable to create required directory {0}".format(directory))
 
   def check_index_file(self):
     try:
@@ -65,15 +76,16 @@ class Marionette(object):
 
   def check_index_file_contents(self):
     print("Checking file contents against configuration")
-    content = []
     try:
       os.stat(self.index_file)
       with open(self.index_file, 'r') as f:
-        for i in range(len(self.index_content)):
-          content.append(f.readline())
+          content = f.read()
       if self.index_content == content:
+        print("File contents match expected content")
         return True
       else:
+        print("File contents DO NOT match expected content")
+        print(content)
         return False
     except IOError as e:
       print("Unable to confirm file contents")
@@ -83,6 +95,7 @@ class Marionette(object):
       self.check_install_status(package)
     for missing_package in self.missing_packages:
       self.install_package(missing_package)
+      self.post_install_cleanup(missing_package)
     if not self.check_directories():
       self.create_directories()
     self.check_index_file()
