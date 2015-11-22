@@ -23,11 +23,11 @@ class Marionette(object):
     print("Checking if {0} is installed".format(package))
     try:
       check_for_package = subprocess.check_call(['/usr/bin/which', package])
+      print("Package {0} is verified as installed".format(package))
     except subprocess.CalledProcessError as e:
       print("Package {0} is not installed, adding to missing packages list for installation"
             .format(package))
       self.missing_packages.append(package)
-    print("Package {0} is verified as installed".format(package))
 
   def install_package(self, package):
     print("Installing {0} automatically".format(package))
@@ -39,7 +39,7 @@ class Marionette(object):
   def post_install_cleanup(self, package):
     print("Doing post install cleanup for package {0}".format(package))
     if package == 'apache2':
-      if os.stat('/var/www/html/index.html'):
+      if os.path.isfile('/var/www/html/index.html'):
         os.rename('/var/www/html/index.html', '/var/www/html/index.apache2_default')
 
   def check_directories(self):
@@ -63,7 +63,7 @@ class Marionette(object):
     try:
       os.stat(self.index_file)
     except (IOError, OSError) as e:
-      print("File not found: {0}\n".format(self.index_file))
+      print("File not found: {0}".format(self.index_file))
       print("File will be created with configured content")
       self.write_index_dot_php()
 
