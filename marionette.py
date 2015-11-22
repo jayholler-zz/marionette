@@ -39,7 +39,8 @@ class Marionette(object):
   def post_install_cleanup(self, package):
     print("Doing post install cleanup for package {0}".format(package))
     if package == 'apache2':
-      os.rename('/var/www/html/index.html', '/var/www/html/index.apache2_default')
+      if os.stat('/var/www/html/index.html'):
+        os.rename('/var/www/html/index.html', '/var/www/html/index.apache2_default')
 
   def check_directories(self):
     print("Checking for existence of provided directories")
