@@ -13,28 +13,34 @@ class Marionette(object):
   def __init__(self):
     self.packages = ['apache2', 'php5']
     self.services = ['apache2']
-    self.directories = {'webroot': '/var/www/html/'}
-    self.files = {'index': 'index.php'}
+    self.directories = {'webroot': '/var/www/html/', 'etc': '/etc/'}
+    self.files = {
+      'index': ''.join(self.directories['webroot'], 'index.php'),
+      'resolv': ''.join(self.directories['etc'], 'resolv.conf')
+    }
     self.index_content = fixtures.INDEX_DOT_PHP
-    self.index_file = ''.join([self.directories['webroot'], self.files['index']])
+    self.resolvconf_content = fixtures.RESOLV_CONF
+    self.file_contents = {'index': self.index_content, 'resolv': self.resolvconf_content}
+
     self.missing_packages = []
 
   def check_install_status(self, package):
     print("Checking if {0} is installed".format(package))
     try:
-      check_for_package = subprocess.check_call(['/usr/bin/which', package])
+      subprocess.check_call(['/usr/bin/which', package])
       print("Package {0} is verified as installed".format(package))
     except subprocess.CalledProcessError as e:
       print("Package {0} is not installed, adding to missing packages list for installation"
             .format(package))
+      print("Failure received was: {0}".format(e))
       self.missing_packages.append(package)
 
   def install_package(self, package):
     print("Installing {0} automatically".format(package))
     try:
-      install_return_code = subprocess.check_call(['/usr/bin/apt-get', '-y','install', package])
+      return_code = subprocess.check_call(['/usr/bin/apt-get', '-y','install', package])
     except subprocess.CalledProcessError as e:
-      print("Unable to install {0}:\n{1}".format(package, e))
+      print("Unable to install {0} due to:\n{1}\n return code: {2}".format(package, e, return_code))
 
   def post_install_cleanup(self, package):
     print("Doing post install cleanup for package {0}".format(package))
@@ -52,43 +58,52 @@ class Marionette(object):
       except OSError:
         return False
 
-  def create_directories():
+  def create_directories(self):
     for directory in self.directories.values():
       try:
         os.mkdir(directory)
       except IOError as e:
-        print("Unable to create required directory {0}".format(directory))
+        print("Unable to create required directory {0} due to:\n{1}".format(directory, e))
 
-  def check_index_file(self):
-    try:
-      os.stat(self.index_file)
-    except (IOError, OSError) as e:
-      print("File not found: {0}".format(self.index_file))
-      print("File will be created with configured content")
-      self.write_index_dot_php()
+  def check_files(self):
+    for name, cfg_file in self.files.items():
+      try:
+        os.stat(cfg_file)
+      except (IOError, OSError):
+        print("File not found: {0}".format(cfg_file))
+        print("File will be created with configured content")
+        self.write_config_file(name, cfg_file)
 
-  def write_index_dot_php(self):
+  def write_config_file(self, name, cfg_file):
+    if name == 'resolv':
+      print("Using resolvconf -u to update /etc/resolv.conf")
+      try:
+        subprocess.check_call(['/sbin/resolvconf', '-u'])
+        return
+      except subprocess.CalledProcessError as e:
+        print("Unable to run resolvconf to update /etc/resolv.conf")
+        print("Writing /etc/resolv.conf directly from provided expected contents")
     try:
-      with open(self.index_file, 'w') as f:
-        for line in self.index_content:
+      with open(cfg_file, 'w') as f:
+        for line in self.file_contents[name]:
           f.write(line)
     except IOError as e:
-      print("Unable to write {0} due to:\n{1}",format(self.index_file, e))
+      print("Unable to write {0} due to:\n{1}",format(cfg_file, e))
 
-  def check_index_file_contents(self):
+  def check_file_contents(self, name, cfg_file):
     print("Checking file contents against configuration")
     try:
-      os.stat(self.index_file)
-      with open(self.index_file, 'r') as f:
+      os.stat(cfg_file)
+      with open(cfg_file, 'r') as f:
           content = f.read()
-      if self.index_content == content:
+      if self.file_contents[name] == content:
         print("File contents match expected content")
         return True
       else:
         print("File contents DO NOT match expected content")
         print(content)
         return False
-    except IOError as e:
+    except IOError:
       print("Unable to confirm file contents")
 
   def configure_system(self):
@@ -99,9 +114,10 @@ class Marionette(object):
       self.post_install_cleanup(missing_package)
     if not self.check_directories():
       self.create_directories()
-    self.check_index_file()
-    if self.check_index_file_contents() == False:
-      self.write_index_dot_php
+    self.check_files()
+    for name, cfg_file in self.files.items():
+      if self.check_file_contents(name, cfg_file) == False:
+        self.write_config_file(name, cfg_file)
 
   def restart_services(self):
     for service in self.services:
@@ -114,7 +130,7 @@ class Marionette(object):
         else:
           print("Service {0} wasn't running, attempting to start now".format(service))
           subprocess.check_call(['/usr/sbin/service', service, 'start'])
-      except (IOError, subprocess.CalledProcessError) as e:
+      except (IOError, subprocess.CalledProcessError):
         print("Failed to restart service {0}".format(service))
 
 
@@ -122,4 +138,5 @@ if __name__ == "__main__":
   marionette = Marionette()
   marionette.configure_system()
   marionette.restart_services()
+
 
