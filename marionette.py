@@ -15,8 +15,8 @@ class Marionette(object):
     self.services = ['apache2']
     self.directories = {'webroot': '/var/www/html/', 'etc': '/etc/'}
     self.files = {
-      'index': ''.join(self.directories['webroot'], 'index.php'),
-      'resolv': ''.join(self.directories['etc'], 'resolv.conf')
+      'index': ''.join([self.directories['webroot'], 'index.php']),
+      'resolv': ''.join([self.directories['etc'], 'resolv.conf'])
     }
     self.index_content = fixtures.INDEX_DOT_PHP
     self.resolvconf_content = fixtures.RESOLV_CONF
